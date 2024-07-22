@@ -126,20 +126,29 @@
             outline: none;
         }
 
-        .delete-btn {
-            background-color: red;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            cursor: pointer;
-            border-radius: 3px;
+        .dropdown {
+            display: block;
+            width: 300px;
+            padding: 10px;
+            margin: 20px auto;
+            background-color: #fff;
+            border: 2px solid #007BFF;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
     </style>
 </head>
 <body>
     <img src="https://logowik.com/content/uploads/images/adani-renewables-green-energy1681.logowik.com.webp" alt="Company Logo" class="logo">
     <h1>PV Form</h1>
-    
+
+    <select class="dropdown" id="plantDropdown" onchange="selectPlant()">
+        <option value="Plant 1">Plant 1</option>
+        <option value="Plant 2">Plant 2</option>
+        <option value="Plant 3">Plant 3</option>
+    </select>
+
     <div id="tabs"></div>
     <input type="text" placeholder="Search.." class="search-bar">
     <div id="data"></div>
@@ -147,6 +156,7 @@
 
     <script>
     let currentBlock = '';
+    let currentPlant = 'Plant 1';
 
     function createTabs(blocks) {
         const tabsContainer = document.getElementById('tabs');
@@ -160,22 +170,31 @@
         });
     }
 
+    function selectPlant() {
+        const dropdown = document.getElementById('plantDropdown');
+        currentPlant = dropdown.value;
+        if (currentPlant === 'Plant 1') {
+            loadData();
+        } else {
+            document.getElementById('data').innerHTML = '<table><tr><th>Column1</th><th>Column2</th></tr></table>';
+        }
+    }
+
     function loadData(block = currentBlock) {
         currentBlock = block;
-        fetch(`/load_data?block=${block}`)
+        fetch(`/load_data?block=${block}&plant=${currentPlant}`)
             .then(response => response.json())
             .then(data => {
                 let table = '<table><tr>';
                 for (let key in data[0]) {
                     table += `<th>${key}</th>`;
                 }
-                table += '<th>Action</th></tr>';  // Add Action column header
-                data.forEach((row, rowIndex) => {
+                table += '</tr>';
+                data.forEach(row => {
                     table += '<tr>';
                     for (let key in row) {
                         table += `<td contenteditable="true">${row[key]}</td>`;
                     }
-                    table += `<td><button class="delete-btn" onclick="deleteRow(this)">Delete</button></td>`;
                     table += '</tr>';
                 });
                 table += '</table>';
@@ -187,7 +206,6 @@
         let data = [];
         let table = document.querySelector('table');
         let headers = Array.from(table.querySelectorAll('th')).map(th => th.textContent);
-        headers.pop(); // Remove the 'Action' column header
         let rows = table.querySelectorAll('tr');
         for (let i = 1; i < rows.length; i++) {
             let row = {};
@@ -197,7 +215,7 @@
             });
             data.push(row);
         }
-        fetch(`/save_data?block=${currentBlock}`, {
+        fetch(`/save_data?block=${currentBlock}&plant=${currentPlant}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -208,11 +226,6 @@
         .then(result => alert(result.message));
     }
 
-    function deleteRow(button) {
-        const row = button.closest('tr');
-        row.parentNode.removeChild(row);
-    }
-
     // Initial setup to create tabs
     const uniqueBlocks = {{ unique_blocks | safe }};
     createTabs(uniqueBlocks);
@@ -221,4 +234,52 @@
 </html>
     """, unique_blocks=blk.tolist())
 
+@app.route('/load_data')
+def load_data():
+    block = request.args.get('block', 'Block-1')
+    plant = request.args.get('plant', 'Plant 1')
+    if plant == 'Plant 1':
+        block_data = df[df['Block'] == block]
+    else:
+        # Return an empty structure for other plants
+        block_data = pd.DataFrame(columns=df.columns)
+    return jsonify(block_data.to_dict(orient='records'))
 
+@app.route('/save_data', methods=['POST'])
+def save_data():
+    block = request.args.get('block', 'Block-1')
+    plant = request.args.get('plant', 'Plant 1')
+    data = request.json
+    block_df = pd.DataFrame(data)
+    global df
+
+    if plant == 'Plant 1':
+        # Remove the existing rows for the block and append the new data
+        df = df[df['Block'] != block].append(block_df, ignore_index=True)
+        df.to_csv(csv_file_path, index=False)
+
+        credentials = service_account.Credentials.from_service_account_file('D:/OneDrive - Adani/Rcode_Adani_Auto/Mypy/agel-svc-winddata-dmz-prod-fdac36bf5880.json')
+        client = bigquery.Client(credentials=credentials, project=project_id)
+        table_id = "agel-svc-winddata-dmz-prod.winddata.Pvform1"
+        table = bigquery.Table(table_id)
+        job_config = bigquery.LoadJobConfig()
+        job_config.write_disposition = "WRITE_TRUNCATE"  # Overwrite table truncate
+        df = df.astype(str)
+        job = client.load_table_from_dataframe(df, table, job_config=job_config)
+    
+    return jsonify({"message": "Data saved successfully"})
+
+# Function to create a public URL
+def create_public_url():
+    return ("""
+        (async () => {
+            const url = await google.colab.kernel.proxyPort(5000);
+            return url;
+        })()
+    """)
+
+# Run the Flask app
+if __name__ == '__main__':
+    public_url = create_public_url()
+    print(f"Public URL: {public_url}")
+    app.run(port=5000)
