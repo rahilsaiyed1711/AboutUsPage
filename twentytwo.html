@@ -213,10 +213,39 @@
         table.deleteRow(rowIndex + 1); // +1 to account for header row
     }
 
+function loadPlantBlocks() {
+        const plant = document.getElementById('plant').value;
+        // Example logic to determine blocks based on selected plant
+        const plantBlocks = {
+            'plant-1': ['block-1', 'block-2', 'block-3', 'block-4'],
+            'plant-2': ['block-2', 'block-3', 'block-4'],
+            'plant-3': ['block-1', 'block-3', 'block-4']
+        };
+
+        const tabs = document.getElementById('tabs');
+        tabs.innerHTML = ''; // Clear current tabs
+
+        plantBlocks[plant].forEach(block => {
+            const button = document.createElement('button');
+            button.className = 'tab';
+            button.textContent = block.replace('-', ' ').toUpperCase();
+            button.onclick = () => loadData(block);
+            tabs.appendChild(button);
+        });
+
+        // Load the first block of the selected plant by default
+        if (plantBlocks[plant].length > 0) {
+            loadData(plantBlocks[plant][0]);
+        }
+    }
+
+
     // Initial setup to create tabs
     const uniqueBlocks = {{ unique_blocks | safe }};
     createTabs(uniqueBlocks);
     </script>
 </body>
 </html>
+
+
 
