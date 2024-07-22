@@ -249,3 +249,35 @@
     // Initial setup to create tabs
     const uniqueBlocks = {{ unique_blocks | safe }};
     createTabs(uniqueBlocks);
+
+
+        ---------------------------------------------------
+            function loadData(block = currentBlock) {
+        currentBlock = block;
+        fetch(`/load_data?block=${block}`)
+            .then(response => response.json())
+            .then(data => {
+                let table = '<table><tr>';
+                for (let key in data[0]) {
+                    table += `<th>${key}</th>`;
+                }
+                table += '<th>Action</th></tr>';  // Add Action column header
+                data.forEach((row, rowIndex) => {
+                    table += '<tr>';
+                    for (let key in row) {
+                        table += `<td contenteditable="true">${row[key]}</td>`;
+                    }
+                    table += `<td><button class="delete-btn" onclick="deleteRow(this)">Delete</button></td>`;
+                    table += '</tr>';
+                });
+                table += '</table>';
+                document.getElementById('data').innerHTML = table;
+            });
+    }
+
+
+
+        function deleteRow(button) {
+        const row = button.closest('tr');
+        row.parentNode.removeChild(row);
+    }
